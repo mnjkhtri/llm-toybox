@@ -243,15 +243,15 @@ class Llama3Block(nn.Module):
 class Llama3(nn.Module, FromPretrainedMixin, InferenceMixin):
     PRETRAINED_SPECS = LLAMA3_SPECS
 
-    def __init__(self, vocab_size, max_length, embed_dim, ff_dim, num_heads, num_kv_heads, num_layers):
+    def __init__(self, vocab_size, max_length, d_model, d_mlp, n_heads, n_kv_heads, n_layers):
         super().__init__()
         self.vocab_size = vocab_size
         self.max_length = max_length
-        self.d_model = embed_dim
-        self.d_mlp = ff_dim
-        self.n_heads = num_heads
-        self.n_kv_heads = num_kv_heads
-        self.n_layers = num_layers
+        self.d_model = d_model
+        self.d_mlp = d_mlp
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.n_layers = n_layers
 
         self.embed = Llama3Embedding(self.vocab_size, self.d_model)
         self.lm_head = Llama3LMHead(self.d_model)

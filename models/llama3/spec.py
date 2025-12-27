@@ -3,7 +3,7 @@ from models.pretrained import PretrainedSpec
 
 def _llama3_spec(url, cache_dir):
 
-    config = dict(vocab_size=128256, max_length=8192, embed_dim=2048, ff_dim=4*2048, num_heads=32, num_kv_heads=8, num_layers=16)
+    config = dict(vocab_size=128256, max_length=8192, d_model=2048, d_mlp=4*2048, n_heads=32, n_kv_heads=8, n_layers=16)
 
     embedding_map = {
         'model.embed_tokens.weight': 'embed.W_E.weight',
@@ -28,7 +28,7 @@ def _llama3_spec(url, cache_dir):
 
     mappings = {**embedding_map, **lm_head_map}
 
-    for i in range(config["num_layers"]):
+    for i in range(config["n_layers"]):
         mappings.update(blocks_map(i))
 
     return PretrainedSpec(url=url, cache_dir=cache_dir, config=config, mappings=mappings)

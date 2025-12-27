@@ -99,7 +99,7 @@ class GPT2(nn.Module, FromPretrainedMixin, InferenceMixin):
         assert T_total <= self.max_length, "sequence length cant exceed max length"
 
         # positions for the new tokens start after the prefix
-        x_pos = torch.arange(T_past, T_total, device=toks.device).unsqueeze(0) # [1, T_new]
+        x_pos = torch.arange(T_past, T_total, dtype=toks.dtype, device=toks.device).unsqueeze(0) # [1, T_new]
         resid = self.embed(toks, x_pos=x_pos) # [B, T_new, De]
 
         if use_cache and past_key_values is None:
@@ -247,13 +247,13 @@ class GPT2MHAttention(nn.Module):
 
         attn_mask = self._get_mask(T_past, T_total, resid.device) # [1, 1, T_new, T_total]
 
-        att = torch.einsum("bhqd,bhkd->bhqk", q, K) / (self.d_head ** 0.5)  # [B, H, T_new, T_total]
+        att = torch.einsum("bhqd,bhkd->bhqk", q, K) / (self.d_head ** 0.5) # [B, H, T_new, T_total]
         att = att.masked_fill(~attn_mask, float("-inf"))
         att = self.hook_attn_scores(att)
         att = F.softmax(att, dim=-1)
         att = self.hook_attn_probs(att)
 
-        out = torch.einsum("bhqk,bhkd->bhqd", att, V)  # [B, H, T_new, Dh]
+        out = torch.einsum("bhqk,bhkd->bhqd", att, V) # [B, H, T_new, Dh]
         y = self.W_O(self._merge_heads(out)) # [B, T_new, De]
 
         return (y, (K, V)) if use_cache else y
