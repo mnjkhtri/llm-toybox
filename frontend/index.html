@@ -423,6 +423,35 @@
       UI.close.disabled = !connected;
     }
 
+    function resetViewState() {
+      STATE.tokens.clear();
+      STATE.layerOrder = [];
+      STATE.pred = { pos: null, tok: "" };
+      STATE.selectedPos = null;
+      STATE.activeTab = "probs";
+      STATE.currLayer = null;
+      STATE.attn.meta.clear();
+      STATE.attn.order = [];
+      STATE.attn.store.clear();
+      STATE.attn.currLayer = null;
+      STATE.attn.currHead = "avg";
+      STATE.attn.viewMode = "grid";
+      STATE.cam = { ax: 0.5, ay: 0.6, scale: 40, panX: 0, panY: 0 };
+      STATE.tree.panX = 0; STATE.tree.panY = 0; STATE.tree.scale = 1.0;
+      STATE.tree.physicsNodes = []; STATE.tree.physicsLinks = [];
+      STATE.hoverHeat = null; STATE.hoverNode = null;
+      STATE.draggingNode = null; STATE.dragAnchor = null;
+      STATE.isPanning = false; STATE.isDragging = false;
+      STATE.lastMouse = {x:0, y:0};
+      STATE.p2d = [];
+      UI.selLayer.innerHTML = "";
+      UI.selAttnLayer.innerHTML = "";
+      UI.hud.layerD.innerHTML = ""; UI.hud.layerT.textContent = "Layer View";
+      UI.hud.heatInfo.innerHTML = ""; UI.hud.heatTitle.textContent = "Attention Map";
+      UI.hud.treeInfo.innerHTML = "";
+      setTab('probs');
+    }
+
     // --- Helpers ---
     const escape = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const orderedToks = () => [...STATE.tokens.values()].sort((a,b)=>a.pos-b.pos);
@@ -498,13 +527,29 @@
       updateUI();
     }
 
+    const EMPTY_LIST_HTML = '<div style="padding:32px 20px; text-align:center; color:#9ca3af; font-size:12px;">Waiting for data...</div>';
+
     function updateUI() {
       const toks = orderedToks();
-      UI.tokenCount.textContent = toks.length;
-      
-      const currentCount = UI.tokenList.querySelectorAll('.tokItem').length;
       const targetCount = toks.length + (STATE.pred.pos!==null?1:0);
+      UI.tokenCount.textContent = toks.length;
+
+      UI.btnAttnGrid.classList.toggle('active', STATE.attn.viewMode === 'grid');
+      UI.btnAttnAvg.classList.toggle('active', STATE.attn.viewMode !== 'grid' && STATE.attn.currHead === 'avg');
       
+      if(targetCount === 0) {
+        UI.tokenList.innerHTML = EMPTY_LIST_HTML;
+        UI.selLayer.innerHTML = "";
+        UI.selAttnLayer.innerHTML = "";
+        UI.miniDepth.style.display = 'none';
+        UI.hud.layerD.innerHTML = ""; UI.hud.layerT.textContent = "Layer View";
+        UI.hud.heatInfo.innerHTML = ""; UI.hud.heatTitle.textContent = "Attention Map";
+        UI.hud.treeInfo.innerHTML = "";
+        render();
+        return;
+      }
+
+      const currentCount = UI.tokenList.querySelectorAll('.tokItem').length;
       if(currentCount !== targetCount) {
         UI.tokenList.innerHTML = "";
         toks.forEach(t => {
@@ -1465,7 +1510,7 @@
       };
       ws.send(JSON.stringify(payload));
     };
-    UI.clear.onclick = () => { STATE.tokens.clear(); UI.tokenList.innerHTML=""; render(); };
+    UI.clear.onclick = () => resetViewState();
 
     window.onresize = resize;
     setTab('probs');
