@@ -21,7 +21,7 @@ python generate.py --model llama3 --type base --prompt "life is"
 
 start the websocket server (for streaming tokens + internals)
 ```bash
-uvicorn server:app --host 0.0.0.0 --port 8000
+uvicorn stream_server:app --host 0.0.0.0 --port 8000
 ```
 
 serve the static frontend (simple local file host)
