@@ -160,7 +160,7 @@ class Llama3MHAttention(nn.Module):
         K_past, V_past = past_kv if past_kv is not None else (None, None)
         T_past = 0 if K_past is None else K_past.size(2)
 
-        x_pos = torch.arange(T_past, T_past + T_new, dtype=resid.dtype, device=resid.device).unsqueeze(0).expand(B, -1)
+        x_pos = torch.arange(T_past, T_past + T_new, device=resid.device, dtype=torch.long)[None, :].expand(B, -1)
         cos, sin = self._rope_cos_sin(self.d_head, self.rope, x_pos=x_pos, device=resid.device, dtype=resid.dtype)
         q, k = self.apply_rotary_pos_emb(q, k, cos, sin)
 

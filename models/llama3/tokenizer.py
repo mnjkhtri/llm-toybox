@@ -33,6 +33,14 @@ class Llama3Tokenizer:
             mergeable_ranks=mergeable_ranks,
             special_tokens=self.special_tokens,
         )
+
+    @property
+    def eos_token_id(self):
+        return self.special_tokens["<|end_of_text|>"]
+
+    @property
+    def eos_token_id_instruct(self):
+        return self.special_tokens["<|eot_id|>"]
     
     def encode(self, text):
         return [self.special_tokens['<|begin_of_text|>']] + self.model.encode(text, allowed_special=set(), disallowed_special=set())
