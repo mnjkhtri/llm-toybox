@@ -6,7 +6,6 @@ import os
 
 class Gemma3Tokenizer:
     def __init__(self, model_path):
-
         self.tokenizer = Tokenizer.from_file(model_path)
     
     def encode(self, text):
@@ -17,6 +16,14 @@ class Gemma3Tokenizer:
 
     def decode(self, ids):
         return self.tokenizer.decode(ids, skip_special_tokens=False)
+    
+    @property
+    def eos_token_id(self):
+        return self.tokenizer.token_to_id("<eos>")
+
+    @property
+    def eos_token_id_instruct(self):
+        return self.tokenizer.token_to_id("<end_of_turn>")
 
     @classmethod
     def from_pretrained(cls):

@@ -4,7 +4,8 @@ from models.pretrained import PretrainedSpec
 def _gemma3_spec(url, cache_dir):
 
     config = dict(vocab_size=262144, max_length=32768, d_model=640, d_mlp=2048, n_heads=4, n_kv_heads=1, d_head=256,
-        attentions=[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0]
+        attentions=[1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0],
+        window_size=512
     )
 
     embedding_map = {
