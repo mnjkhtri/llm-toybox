@@ -1,0 +1,1475 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Transformer Vis</title>
+  <style>
+    :root{
+      --bg:#ffffff; --panel:#f9fafb; --text:#1f2937; 
+      --border:#e5e7eb; --primary:#2563eb; --primary-hover:#1d4ed8;
+      --highlight:#f59e0b; --sel-bg:#eff6ff; --text-muted: #6b7280;
+      --success: #22c55e; --success-bg: #f0fdf4;
+      --danger: #ef4444; --danger-bg: #fef2f2;
+      --warn: #f59e0b; --warn-bg: #fffbeb;
+      --radius: 6px; --ctrl-h: 34px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      background:var(--bg); color:var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      font-size: 13px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow:hidden;
+    }
+
+    /* --- Scrollbar Styling --- */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+    /* --- Layout Skeleton --- */
+    header{
+      height:54px; display:flex; align-items:center; justify-content:space-between; 
+      padding:0 20px; border-bottom:1px solid var(--border); background:#fff;
+    }
+    .title{font-weight:600; font-size:16px; letter-spacing:-0.01em; color:#111}
+    .status{
+      display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;
+      color:var(--text-muted); background:var(--panel); padding:4px 12px; 
+      border-radius:99px; border:1px solid var(--border)
+    }
+    .dot{width:8px; height:8px; border-radius:50%; background:#ef4444; transition:background 0.3s}
+    .dot.ok{background:#22c55e}
+
+    main{height:calc(100% - 54px); display:grid; grid-template-columns:240px 1fr 300px; min-height:0}
+
+    /* --- Sidebar: Tokens --- */
+    aside.tokens{border-right:1px solid var(--border); background:#fff; display:flex; flex-direction:column; min-height:0}
+    
+    .tokensHeader{
+      background:var(--panel); border-bottom:1px solid var(--border); 
+      padding:0 16px; display:flex; align-items:center; justify-content:space-between; 
+      height:44px; font-weight:600; font-size:12px; color:var(--text-muted); letter-spacing:0.02em;
+    }
+    
+    .tokenList{flex:1; overflow-y:auto; scroll-behavior:smooth}
+    .tokItem{display:flex; gap:12px; padding:8px 16px; border-bottom:1px solid #f3f4f6; cursor:pointer; align-items:center; transition:background 0.15s}
+    .tokItem:hover{background:#f9fafb}
+    .tokItem.sel{background:var(--sel-bg); border-left:3px solid var(--primary); padding-left:13px}
+    .tokItem.next{background:#fffbeb} 
+    
+    .tokPos{font-family:'SF Mono', Menlo, monospace; font-size:11px; color:#9ca3af; min-width:24px}
+    .tokContent{
+        font-family:'SF Mono', Menlo, monospace; 
+        font-size:13px; color:#111; font-weight:500;
+        white-space: pre; 
+    }
+
+    /* --- Center: Viewport --- */
+    section.view{display:flex; flex-direction:column; background:#fff; min-width:0; position:relative}
+    .tabs{height:44px; display:flex; border-bottom:1px solid var(--border); background:var(--panel); padding:0 8px; gap:4px; align-items:flex-end}
+    .tabBtn{
+      border:none; background:transparent; cursor:pointer; font-weight:500; font-size:13px; color:var(--text-muted);
+      padding:0 16px; height:36px;
+      border-radius:6px 6px 0 0; border-bottom:2px solid transparent; transition:all 0.2s;
+    }
+    .tabBtn:hover{background:#e5e7eb; color:#111}
+    .tabBtn.on{background:#fff; color:var(--primary); border-bottom-color:var(--primary); font-weight:600}
+    
+    .tabArea{flex:1; position:relative; background:#fff; min-height:0}
+    .tabPanel{position:absolute; inset:0; display:none; flex-direction:column}
+    .tabPanel.on{display:flex}
+
+    /* Canvas & HUD */
+    .canvasPane{flex:1; position:relative; overflow:hidden; background: radial-gradient(circle at center, #ffffff 0%, #fcfcfc 100%);}
+    canvas{display:block; width:100%; height:100%}
+    .cursor-grab { cursor: grab; }
+    .cursor-grabbing { cursor: grabbing; }
+    .cursor-pointer { cursor: pointer; }
+
+    .hud{
+      position:absolute; top:0; right:0;
+      padding:8px 12px; 
+      pointer-events:none; text-align:right;
+      background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(4px);
+      border-bottom: 1px solid var(--border); border-left: 1px solid var(--border);
+      border-bottom-left-radius: 8px;
+      min-width: 0;
+      transition: opacity 0.2s;
+      z-index: 20;
+    }
+    .hudHeader{font-size:12px; font-weight:700; color:#111; letter-spacing: 0.02em;}
+    .hudContent{
+        font-family: 'SF Mono', Menlo, monospace; 
+        font-size:12px; line-height:1.4; color:#555;
+        white-space: pre-wrap;
+        margin-top: 0;
+    }
+    .hudContent:not(:empty) { margin-top: 4px; }
+
+    /* Mini Depth View */
+    .miniDepth{
+      position:absolute; bottom:16px; right:16px;
+      width:260px; height:200px;
+      background:rgba(255,255,255,0.95); backdrop-filter:blur(4px);
+      border:1px solid var(--border); border-radius:8px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.05);
+      display:none; flex-direction:column; overflow:hidden; z-index:100;
+    }
+    .miniHeader{
+      background:#f9fafb; border-bottom:1px solid var(--border);
+      padding:6px 12px; font-size:12px; font-weight:600; color:#374151;
+      display:flex; justify-content:space-between; align-items:center; letter-spacing:0.01em;
+    }
+    .miniCanvasWrap{flex:1; position:relative; overflow:hidden;}
+    #plotMini{width:100%; height:100%; display:block;}
+
+    /* --- PROBABILITY TAB STYLES --- */
+    .treeContainer {
+        flex: 1; position: relative; overflow: hidden; 
+        background: #fdfdfd; 
+    }
+    
+    #probEmptyState {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        text-align: center; color: #9ca3af; pointer-events: none;
+    }
+
+    /* --- Right: Settings --- */
+    aside.settings{
+      border-left:1px solid var(--border); background:#fff; display:flex; flex-direction:column; min-height:0;
+    }
+    
+    .settingsBody{
+        padding:20px; padding-bottom:100px; 
+        overflow-y:auto; display:flex; flex-direction:column; gap:20px
+    }
+    
+    .group{display:flex; flex-direction:column; gap:6px}
+    
+    label{
+      font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; 
+      letter-spacing:0.04em; margin-bottom:0px; display:block
+    }
+
+    input[type=text], input[type=number], select, textarea {
+      width: 100%; background: #fff; border: 1px solid #d1d5db;
+      border-radius: var(--radius); color: #1f2937; font-size: 13px;
+      font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+    input[type=text], input[type=number], select, button {
+      height: var(--ctrl-h); padding: 0 10px; line-height: var(--ctrl-h);
+    }
+    textarea {
+      padding: 8px 10px; min-height: 80px; resize: vertical;
+      line-height: 1.4; font-family: 'SF Mono', Menlo, monospace;
+    }
+    input:focus, textarea:focus, select:focus, button:focus {
+      outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--sel-bg);
+    }
+    button {
+      background: #fff; border: 1px solid #d1d5db; cursor: pointer;
+      font-weight: 500; color: #374151; display: inline-flex; align-items: center; justify-content: center;
+      border-radius: var(--radius);
+    }
+    button:hover { background: #f9fafb; border-color: #9ca3af; }
+    button:active { background: #f3f4f6; }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+    button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.danger { color: #ef4444; border-color: #fca5a5; }
+    button.danger:hover:not(:disabled) { background: #fef2f2; border-color: #ef4444; }
+
+    .btnRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
+    .inputRow { display: grid; grid-template-columns: 1fr 80px; gap: 8px; align-items: end; }
+    .separator { height: 1px; background: var(--border); width: 100%; margin: 4px 0; }
+    .hidden { display: none !important }
+
+    /* Toggle Group */
+    .toggleGroup { display:flex; border:1px solid #d1d5db; border-radius:var(--radius); overflow:hidden; }
+    .toggleGroup button { border:none; border-radius:0; flex:1; height:32px; font-size:12px; background: #fff; color: #374151; }
+    .toggleGroup button + button { border-left:1px solid #d1d5db; }
+    .toggleGroup button:hover { background: #f9fafb; }
+    .toggleGroup button.active { background:var(--sel-bg); color:var(--primary); font-weight:600; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Transformer <span style="font-weight:400; color:#9ca3af; margin-left:4px">Vis</span></div>
+    <div class="status"><div id="dot" class="dot"></div><span id="status">Disconnected</span></div>
+  </header>
+
+  <main>
+    <aside class="tokens">
+      <div class="tokensHeader">Tokens <span id="tokenCount" style="color:#111; font-weight:700">0</span></div>
+      <div class="tokenList" id="tokenList">
+        <div style="padding:32px 20px; text-align:center; color:#9ca3af; font-size:12px;">Waiting for data...</div>
+      </div>
+    </aside>
+
+    <section class="view">
+      <div class="tabs">
+        <button id="tabProbs" class="tabBtn on">Probability Tree</button>
+        <button id="tabLayer" class="tabBtn">Residual Stream</button>
+        <button id="tabAttention" class="tabBtn">Attention Map</button>
+      </div>
+
+      <div class="tabArea">
+        <div id="panelProbs" class="tabPanel on">
+            <div class="treeContainer">
+                <canvas id="treeCanvas"></canvas>
+                <div class="hud">
+                    <div class="hudHeader">Probability Tree</div>
+                    <div class="hudContent" id="treeInfo"></div>
+                </div>
+                <div id="probEmptyState">
+                    Run the model to see the generation tree.
+                </div>
+            </div>
+        </div>
+
+        <div id="panelLayer" class="tabPanel">
+          <div class="canvasPane">
+            <canvas id="plotLayer"></canvas>
+            <div class="hud">
+              <div class="hudHeader" id="hudLayerTitle">Layer View</div>
+              <div id="hudLayerDetail" class="hudContent"></div>
+            </div>
+            <div id="miniDepth" class="miniDepth">
+              <div class="miniHeader"><span id="miniTitle">Depth</span></div>
+              <div class="miniCanvasWrap"><canvas id="plotMini"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panelAttention" class="tabPanel">
+          <div class="canvasPane">
+            <canvas id="heat"></canvas>
+            <div class="hud">
+              <div class="hudHeader" id="heatTitle">Attention Map</div>
+              <div class="hudContent" id="heatInfo"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <aside class="settings">
+      <div class="settingsBody">
+        <div class="group">
+          <label>Connection</label>
+          <input id="url" type="text" value="ws://127.0.0.1:8000/ws" spellcheck="false" placeholder="ws://..." style="margin-bottom:2px" />
+          <div class="btnRow">
+            <button id="connectBtn" class="primary">Connect</button>
+            <button id="closeBtn" disabled class="danger">Disconnect</button>
+          </div>
+        </div>
+        
+        <div class="separator"></div>
+
+        <div id="ctrlProbs" class="group hidden">
+            <div style="font-size:11px; color:#9ca3af; margin-bottom:4px;">
+            </div>
+        </div>
+
+        <div id="ctrlLayer" class="group hidden">
+          <label>Analysis Layer</label>
+          <select id="layerSelect"></select>
+        </div>
+
+        <div id="ctrlAttention" class="group hidden">
+          <label>Attention Params</label>
+          <select id="attnLayerSelect" style="margin-bottom:8px"></select>
+          <label>View Mode</label>
+          <div class="toggleGroup">
+            <button id="btnAttnAvg">Average</button>
+            <button id="btnAttnGrid" class="active">Gallery</button>
+          </div>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="group">
+          <label>Model</label>
+          <div class="inputRow">
+            <select id="model">
+              <option value="gemma3" selected>Gemma3</option>
+              <option value="llama3">Llama3</option>
+              <option value="qwen3">Qwen3</option>
+              <option value="gpt2">GPT2</option>
+            </select>
+            <select id="variant">
+              <option value="base" selected>Base</option>
+              <option value="instruct">Instruct</option>
+            </select>
+          </div>
+
+          <div class="inputRow" style="margin-top:8px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <label style="font-size:10px;color:#9ca3af">Device</label>
+              <select id="device">
+                <option value="cuda">CUDA</option>
+                <option value="cpu">CPU</option>
+              </select>
+            </div>
+            <div></div>
+          </div>
+
+          <div class="btnRow" style="margin-top:8px">
+            <button id="loadBtn" class="primary" disabled>Load Model</button>
+            <button id="unloadBtn" class="danger" disabled>Unload</button>
+          </div>
+
+          <label style="margin-top:8px">Model Input</label>
+          <textarea id="prompt" placeholder="Enter prompt...">Life is beautiful because</textarea>
+          
+          <div class="inputRow">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <label style="font-size:10px;color:#9ca3af">Max Tokens</label>
+              <input id="maxNew" type="number" min="1" value="32" />
+            </div>
+            <button id="sendBtn" class="primary" disabled>Run</button>
+          </div>
+        </div>
+        
+        <button id="clearBtn" style="margin-top:auto">Reset View</button>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    // --- State ---
+    const STATE = {
+      tokens: new Map(),
+      layerOrder: [],
+      pred: { pos: null, tok: "" },
+      selectedPos: null,
+      activeTab: "probs",
+      currLayer: null,
+      attn: { 
+        meta: new Map(),
+        order: [], 
+        store: new Map(),
+        currLayer: null, 
+        currHead: "avg",
+        viewMode: "grid"
+      },
+      // Layer View Camera
+      cam: { ax: 0.5, ay: 0.6, scale: 40, panX: 0, panY: 0 }, 
+      // Tree View State
+      tree: { 
+        panX: 0, panY: 0, scale: 1.0, 
+        physicsNodes: [], 
+        physicsLinks: [],
+        animId: null
+      },
+      hoverHeat: null, 
+      hoverNode: null, 
+      draggingNode: null, 
+      dragAnchor: null, 
+      isPanning: false, 
+      isDragging: false,
+      lastMouse: {x:0, y:0},
+      p2d: [] 
+    };
+
+    // --- DOM ---
+    const el = id => document.getElementById(id);
+    const UI = {
+      url: el('url'), connect: el('connectBtn'), close: el('closeBtn'),
+      prompt: el('prompt'), maxNew: el('maxNew'), send: el('sendBtn'), clear: el('clearBtn'),
+      model: el('model'), variant: el('variant'), device: el('device'),
+      load: el('loadBtn'), unload: el('unloadBtn'),
+      status: el('status'), dot: el('dot'),
+      tokenList: el('tokenList'), tokenCount: el('tokenCount'),
+      tabs: { layer: el('tabLayer'), attn: el('tabAttention'), probs: el('tabProbs') },
+      panels: { layer: el('panelLayer'), attn: el('panelAttention'), probs: el('panelProbs') },
+      ctrls: { layer: el('ctrlLayer'), attn: el('ctrlAttention'), probs: el('ctrlProbs') },
+      cvs: { layer: el('plotLayer'), heat: el('heat'), mini: el('plotMini'), tree: el('treeCanvas') },
+      ctx: { 
+          layer: el('plotLayer').getContext('2d'), 
+          heat: el('heat').getContext('2d'), 
+          mini: el('plotMini').getContext('2d'),
+          tree: el('treeCanvas').getContext('2d')
+      },
+      selLayer: el('layerSelect'), selAttnLayer: el('attnLayerSelect'),
+      btnAttnAvg: el('btnAttnAvg'), btnAttnGrid: el('btnAttnGrid'),
+      probEmptyState: el('probEmptyState'), 
+      hud: { 
+          layerT: el('hudLayerTitle'), layerD: el('hudLayerDetail'), 
+          heatTitle: el('heatTitle'), heatInfo: el('heatInfo'),
+          treeInfo: el('treeInfo')
+      },
+      miniDepth: el('miniDepth'), miniTitle: el('miniTitle')
+    };
+
+    let ws = null;
+    let activeModel = null;
+    let pendingAction = null; // "load" | "unload" | null
+
+    function updateControls() {
+      const connected = !!ws;
+      const hasModel = !!activeModel;
+      const busy = !!pendingAction;
+      UI.load.disabled = !connected || hasModel || busy;
+      UI.unload.disabled = !connected || !hasModel || busy;
+      UI.send.disabled = !connected || busy;
+      UI.connect.disabled = connected;
+      UI.close.disabled = !connected;
+    }
+
+    // --- Helpers ---
+    const escape = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const orderedToks = () => [...STATE.tokens.values()].sort((a,b)=>a.pos-b.pos);
+    const getHeatColor = val => {
+      val = Math.max(0, Math.min(1, val));
+      const r = Math.round(255 * (1-val));
+      const g = Math.round(255 * (1-val));
+      const b = Math.round(255 - (116 * val));
+      return `rgb(${r},${g},${b})`;
+    };
+
+    // --- Websocket ---
+    function processStep(msg) {
+      if(msg.type !== 'step') return;
+      const newToks = msg.new_toks;
+      const startPos = newToks.start_pos;
+      const textArr = newToks.text || [];
+      
+      textArr.forEach((txt, i) => {
+        const pos = startPos + i;
+        if(!STATE.tokens.has(pos)) STATE.tokens.set(pos, { pos, token: txt, perLayer: new Map(), distribution: null });
+      });
+
+      if (msg.pred) {
+        STATE.pred = { pos: msg.pred.abs_pos, tok: msg.pred.tok || "" };
+        // Attach distribution to the PREVIOUS token
+        const sourcePos = msg.pred.abs_pos - 1;
+        if (STATE.tokens.has(sourcePos)) {
+            STATE.tokens.get(sourcePos).distribution = msg.pred.distribution;
+        }
+      }
+
+      if (msg.projections && Array.isArray(msg.projections)) {
+        msg.projections.forEach(proj => {
+          const name = proj.name;
+          if(!STATE.layerOrder.includes(name)) STATE.layerOrder.push(name);
+          (proj.vectors || []).forEach((vec, i) => {
+            const pos = startPos + i;
+            const tObj = STATE.tokens.get(pos);
+            if(tObj) tObj.perLayer.set(name, vec);
+          });
+        });
+      }
+
+      if (msg.attentions && Array.isArray(msg.attentions)) {
+        msg.attentions.forEach(attn => {
+          const name = attn.name;
+          if(!STATE.attn.meta.has(name)) {
+            STATE.attn.meta.set(name, { name: name, nHeads: (attn.heads ? attn.heads.length : 0) });
+            STATE.attn.order.push(name);
+          }
+          if(!STATE.attn.store.has(name)) STATE.attn.store.set(name, new Map());
+          const lStore = STATE.attn.store.get(name);
+          
+          if(attn.avg) {
+             if(!lStore.has("avg")) lStore.set("avg", new Map());
+             const avgStore = lStore.get("avg");
+             attn.avg.forEach((row, rIdx) => avgStore.set(startPos + rIdx, row));
+          }
+
+          if(attn.heads && Array.isArray(attn.heads)) {
+             attn.heads.forEach((hData, hIdx) => {
+                 const key = `h${hIdx}`;
+                 if(!lStore.has(key)) lStore.set(key, new Map());
+                 const hStore = lStore.get(key);
+                 hData.forEach((row, rIdx) => hStore.set(startPos + rIdx, row));
+             });
+             STATE.attn.meta.get(name).nHeads = Math.max(STATE.attn.meta.get(name).nHeads, attn.heads.length);
+          }
+        });
+      }
+      rebuildTreeGraph();
+      updateUI();
+    }
+
+    function updateUI() {
+      const toks = orderedToks();
+      UI.tokenCount.textContent = toks.length;
+      
+      const currentCount = UI.tokenList.querySelectorAll('.tokItem').length;
+      const targetCount = toks.length + (STATE.pred.pos!==null?1:0);
+      
+      if(currentCount !== targetCount) {
+        UI.tokenList.innerHTML = "";
+        toks.forEach(t => {
+          const div = document.createElement("div");
+          div.className = "tokItem"; div.dataset.pos = t.pos;
+          div.innerHTML = `<div class="tokPos">${t.pos}</div><div class="tokContent">${escape(t.token)}</div>`;
+          div.onclick = () => { STATE.selectedPos = (STATE.selectedPos===t.pos?null:t.pos); updateUI(); };
+          UI.tokenList.appendChild(div);
+        });
+        if(STATE.pred.pos !== null) {
+          const div = document.createElement("div");
+          div.className = "tokItem next"; div.dataset.pos = STATE.pred.pos;
+          div.innerHTML = `<div class="tokPos">${STATE.pred.pos}</div><div class="tokContent">⟪${escape(STATE.pred.tok)}⟫</div>`;
+          div.onclick = () => { STATE.selectedPos = (STATE.selectedPos===STATE.pred.pos?null:STATE.pred.pos); updateUI(); };
+          UI.tokenList.appendChild(div);
+        }
+        UI.tokenList.scrollTop = UI.tokenList.scrollHeight;
+      }
+
+      Array.from(UI.tokenList.children).forEach(el => {
+        el.classList.toggle("sel", parseInt(el.dataset.pos) === STATE.selectedPos);
+      });
+
+      if(!STATE.currLayer && STATE.layerOrder.length) STATE.currLayer = STATE.layerOrder[0];
+      if(UI.selLayer.children.length !== STATE.layerOrder.length) {
+        UI.selLayer.innerHTML = STATE.layerOrder.map(l=>`<option value="${l}">${l}</option>`).join("");
+        UI.selLayer.value = STATE.currLayer;
+      }
+      if(!STATE.attn.currLayer && STATE.attn.order.length) STATE.attn.currLayer = STATE.attn.order[0];
+      if(UI.selAttnLayer.children.length !== STATE.attn.order.length) {
+        UI.selAttnLayer.innerHTML = STATE.attn.order.map(k=>`<option value="${k}">${STATE.attn.meta.get(k).name}</option>`).join("");
+      }
+
+      UI.btnAttnGrid.className = (STATE.attn.viewMode === 'grid') ? 'active' : '';
+      UI.btnAttnAvg.className = (!STATE.attn.viewMode === 'grid' && STATE.attn.currHead === 'avg') ? 'active' : '';
+      
+      UI.miniDepth.style.display = (STATE.selectedPos !== null && STATE.activeTab === 'layer') ? 'flex' : 'none';
+      if(STATE.selectedPos !== null && STATE.tokens.get(STATE.selectedPos)) {
+          UI.miniTitle.textContent = `Depth: "${STATE.tokens.get(STATE.selectedPos).token}"`;
+          renderMiniDepth();
+      }
+
+      render();
+    }
+
+    // --- PROBABILITY TREE LOGIC ---
+    function rebuildTreeGraph() {
+        const toks = orderedToks();
+        const nodes = [];
+        const links = [];
+        
+        // Configuration
+        const Y_STEP = 120;
+        const X_SPREAD = 70; // Horizontal spacing between candidates
+        const MIN_RADIUS = 12;
+        const MAX_RADIUS_ADD = 25;
+
+        // Keep track of existing node positions to prevent "popping"
+        const prevNodes = new Map();
+        STATE.tree.physicsNodes.forEach(n => prevNodes.set(n.id, n));
+
+        // Include prompt tokens as singular nodes
+        let promptEndPos = -1;
+        const distPos = toks.filter(t => t.distribution && t.distribution.top_k_toks).map(t => t.pos);
+        if(distPos.length) promptEndPos = Math.min(...distPos);
+        else if(toks.length) promptEndPos = toks[toks.length - 1].pos;
+
+        if(promptEndPos >= 0) {
+            toks.forEach(t => {
+                if(t.pos > promptEndPos) return;
+                const id = `prompt-${t.pos}`;
+                const targetX = 0;
+                const targetY = 50 + (t.pos * Y_STEP);
+                const old = prevNodes.get(id);
+                const startX = old ? old.x : 0;
+                const startY = old ? old.y : targetY;
+
+                nodes.push({
+                    id: id,
+                    step: t.pos,
+                    tok: t.token,
+                    prob: 1,
+                    isWinner: true,
+                    radius: MIN_RADIUS + 6,
+                    tx: targetX,
+                    ty: targetY,
+                    x: startX,
+                    y: startY,
+                    vx: old ? old.vx : 0,
+                    vy: old ? old.vy : 0
+                });
+
+                links.push({
+                    sourceId: (t.pos === 0) ? null : `prompt-${t.pos-1}`,
+                    targetId: id,
+                    isWinnerPath: true,
+                    yStart: targetY - Y_STEP
+                });
+            });
+        }
+
+        // Create Root
+        if(toks.length > 0) {
+            // Processing sequence
+            let currentY = 50;
+
+            toks.forEach((t, i) => {
+                const nextT = toks[i+1];
+                const actualNextTok = nextT ? nextT.token : (STATE.pred.pos === t.pos+1 ? STATE.pred.tok : null);
+
+                // We only visualize the predictions coming OUT of this token
+                if(t.distribution && t.distribution.top_k_toks) {
+                    const topK = t.distribution.top_k_toks;
+                    const topP = t.distribution.top_k_probs;
+
+                    // Sort indices by probability (descending)
+                    const indices = topK.map((_, idx) => idx).sort((a,b) => topP[b] - topP[a]);
+                    
+                    // Center offset calculation so Rank 0 is Left, Rank N is Right
+                    // Actually, prompt says: "highest prob on left".
+                    // So we map index 0 -> x negative, index N -> x positive.
+                    const count = indices.length;
+                    
+                    indices.forEach((kIdx, sortRank) => {
+                        const tokenStr = topK[kIdx];
+                        const prob = topP[kIdx];
+                        const isWinner = (tokenStr === actualNextTok);
+                        
+                        // ID: step-token
+                        const id = `${t.pos+1}-${kIdx}`;
+                        
+                        // Target Position
+                        // Map sortRank 0..N to -width..+width
+                        const xOffset = (sortRank - (count-1)/2) * X_SPREAD;
+                        const targetX = xOffset;
+                        const targetY = currentY + Y_STEP;
+
+                        const radius = MIN_RADIUS + (prob * MAX_RADIUS_ADD);
+
+                        // Recover old position or start at parent's location
+                        const old = prevNodes.get(id);
+                        const startX = old ? old.x : 0; // rough approximation
+                        const startY = old ? old.y : currentY;
+
+                        nodes.push({
+                            id: id,
+                            step: t.pos + 1,
+                            tok: tokenStr,
+                            prob: prob,
+                            isWinner: isWinner,
+                            radius: radius,
+                            tx: targetX,
+                            ty: targetY,
+                            x: startX,
+                            y: startY,
+                            vx: old ? old.vx : 0,
+                            vy: old ? old.vy : 0
+                        });
+
+                        // Link from "Parent" (Visual only, usually we just link steps)
+                        // Ideally we link from the node at step T that was the winner
+                        // But strictly, these branch off the previous context.
+                        // We will link all these candidates to the "Winner" node of the previous step.
+                        // If step=0, link to root (imaginary)
+                        
+                        // Find winner of previous step to serve as parent anchor
+                        let parentId = null;
+                        if(t.pos > 0) {
+                            // Find the node in previous step that matches current token 't'
+                            // This is expensive to search every time, but robust
+                            const parentNode = STATE.tree.physicsNodes.find(n => n.step === t.pos && n.isWinner);
+                            if(parentNode) parentId = parentNode.id;
+                        }
+
+                        links.push({
+                            sourceId: parentId, // can be null for first step
+                            targetId: id,
+                            isWinnerPath: isWinner,
+                            yStart: currentY
+                        });
+                    });
+                }
+                currentY += Y_STEP;
+            });
+        }
+        
+        STATE.tree.physicsNodes = nodes;
+        STATE.tree.physicsLinks = links;
+    }
+
+    function updateTreePhysics() {
+        const nodes = STATE.tree.physicsNodes;
+        
+        nodes.forEach(node => {
+            if(node === STATE.draggingNode) return;
+
+            // 1. Attraction to Target (The "Sorted" Position)
+            // Stronger Y pull to keep timeline structure
+            const kY = 0.08; 
+            const kX = 0.05;
+            
+            node.vx += (node.tx - node.x) * kX;
+            node.vy += (node.ty - node.y) * kY;
+
+            // 2. Repulsion (Bubbles)
+            nodes.forEach(other => {
+                if(node === other) return;
+                // Only repel close neighbors (optimization)
+                if(Math.abs(node.step - other.step) > 1) return;
+
+                const dx = node.x - other.x;
+                const dy = node.y - other.y;
+                const distSq = dx*dx + dy*dy;
+                const minR = node.radius + other.radius + 5; // buffer
+                
+                if(distSq < minR*minR && distSq > 0.001) {
+                    const dist = Math.sqrt(distSq);
+                    const force = (minR - dist) / dist * 0.8; // Strong repulsion
+                    node.vx += dx * force;
+                    node.vy += dy * force;
+                }
+            });
+
+            // 3. Damping
+            node.vx *= 0.85;
+            node.vy *= 0.85;
+
+            // 4. Integration
+            node.x += node.vx;
+            node.y += node.vy;
+        });
+    }
+
+    // --- RENDERERS ---
+
+    function render() {
+      if(STATE.activeTab === 'layer') renderLayerFlow();
+      else if(STATE.activeTab === 'attn') renderHeat();
+      else if(STATE.activeTab === 'probs') {
+          // Probs is animated, so it's handled by the loop
+      }
+    }
+
+    // Animation Loop for Tree
+    function animLoop() {
+        if(STATE.activeTab === 'probs') {
+            updateTreePhysics();
+            renderTree();
+        }
+        requestAnimationFrame(animLoop);
+    }
+    // Start loop
+    animLoop();
+
+
+    function renderTree() {
+        const cvs = UI.cvs.tree;
+        const ctx = UI.ctx.tree;
+        const w = cvs.width, h = cvs.height;
+        
+        // Background
+        ctx.fillStyle = "#fdfdfd";
+        ctx.fillRect(0,0,w,h);
+
+        if(STATE.tree.physicsNodes.length === 0) {
+            UI.probEmptyState.style.display = "block";
+            return;
+        }
+        UI.probEmptyState.style.display = "none";
+
+        ctx.save();
+        // Camera Transform
+        ctx.translate(w/2 + STATE.tree.panX, 50 + STATE.tree.panY);
+        ctx.scale(STATE.tree.scale, STATE.tree.scale);
+
+        // Draw Links
+        // We need to map IDs to coordinates efficiently
+        const nodeMap = new Map();
+        STATE.tree.physicsNodes.forEach(n => nodeMap.set(n.id, n));
+
+        // Determine selection highlight in tree (from left token selection)
+        let selectedId = null;
+        if(STATE.selectedPos !== null) {
+            const pId = `prompt-${STATE.selectedPos}`;
+            if(nodeMap.has(pId)) selectedId = pId;
+            else {
+                const win = STATE.tree.physicsNodes.find(n => n.step === STATE.selectedPos && n.isWinner);
+                if(win) selectedId = win.id;
+            }
+        }
+
+        STATE.tree.physicsLinks.forEach(link => {
+            const target = nodeMap.get(link.targetId);
+            if(!target) return;
+
+            let sx = 0, sy = link.yStart;
+            if(link.sourceId) {
+                const src = nodeMap.get(link.sourceId);
+                if(src) { sx = src.x; sy = src.y; }
+            } else {
+                // Root input link
+                sx = 0; sy = target.y - 120;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            
+            // Bezier curve
+            const c1x = sx; 
+            const c1y = sy + (target.y - sy) * 0.5;
+            const c2x = target.x;
+            const c2y = target.y - (target.y - sy) * 0.5;
+            
+            ctx.bezierCurveTo(c1x, c1y, c2x, c2y, target.x, target.y);
+
+            if(link.isWinnerPath) {
+                ctx.strokeStyle = "#2563eb";
+                ctx.lineWidth = 2.5;
+                ctx.setLineDash([]);
+            } else {
+                ctx.strokeStyle = "#e5e7eb";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
+
+        // Draw Nodes
+        STATE.tree.physicsNodes.forEach(node => {
+            const isHover = (STATE.hoverNode && STATE.hoverNode.id === node.id);
+            const isDrag = (STATE.draggingNode === node);
+            const isSelected = (selectedId && selectedId === node.id);
+            
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.radius, 0, Math.PI*2);
+            
+            // Fill
+            if(node.isWinner) ctx.fillStyle = "#eff6ff"; // light blue
+            else ctx.fillStyle = "#ffffff";
+            
+            if(isHover || isDrag) ctx.fillStyle = "#fffbeb"; // warn bg
+            if(isSelected) ctx.fillStyle = "#dbeafe";
+
+            ctx.fill();
+
+            // Stroke
+            if(node.isWinner) {
+                ctx.strokeStyle = "#2563eb";
+                ctx.lineWidth = 2.5;
+            } else {
+                // Opacity based on prob
+                const alpha = 0.2 + (node.prob * 0.8);
+                ctx.strokeStyle = `rgba(107, 114, 128, ${alpha})`;
+                ctx.lineWidth = 1.5;
+            }
+            
+            if(isHover || isDrag) {
+                ctx.strokeStyle = "#f59e0b";
+                ctx.lineWidth = 3;
+            }
+            if(isSelected) {
+                ctx.strokeStyle = "#2563eb";
+                ctx.lineWidth = 4;
+            }
+
+            ctx.stroke();
+
+            // Text
+            ctx.fillStyle = (node.isWinner || isHover || isSelected) ? "#111" : "#6b7280";
+            ctx.font = (node.isWinner || isSelected) ? "600 11px sans-serif" : "400 11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(node.tok, node.x, node.y);
+
+            // Prob Indicator (Tiny bar below)
+            if(isHover) {
+                ctx.fillStyle = "#f59e0b";
+                ctx.fillRect(node.x - 10, node.y + node.radius + 4, 20 * node.prob, 3);
+                ctx.fillStyle = "#e5e7eb";
+                ctx.fillRect(node.x - 10 + (20*node.prob), node.y + node.radius + 4, 20 * (1-node.prob), 3);
+            }
+        });
+
+        ctx.restore();
+    }
+
+
+    // --- Layer & Heat Renderers (Standard) ---
+    function getLayerPoints() {
+      const toks = orderedToks();
+      if(!toks.length || !STATE.currLayer) return { points: [], bounds: null };
+      const points = [];
+      let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity, minZ=Infinity, maxZ=-Infinity;
+      toks.forEach(t => {
+        const c = t.perLayer.get(STATE.currLayer);
+        if(c) {
+            points.push({x:c[0], y:c[1], z:c[2], pos:t.pos, token:t.token});
+            if(c[0]<minX) minX=c[0]; if(c[0]>maxX) maxX=c[0];
+            if(c[1]<minY) minY=c[1]; if(c[1]>maxY) maxY=c[1];
+            if(c[2]<minZ) minZ=c[2]; if(c[2]>maxZ) maxZ=c[2];
+        }
+      });
+      return { points, bounds: {minX, maxX, minY, maxY, minZ, maxZ} };
+    }
+
+    function projectOrthographic(points, w, h, cam, bounds) {
+      if(!points.length) return [];
+      const cx=(bounds.minX+bounds.maxX)/2, cy=(bounds.minY+bounds.maxY)/2, cz=(bounds.minZ+bounds.maxZ)/2;
+      const span = Math.max(bounds.maxX-bounds.minX, bounds.maxY-bounds.minY, bounds.maxZ-bounds.minZ) || 1.0;
+      const normFactor = span / 8; 
+      const ca=Math.cos(cam.ay), sa=Math.sin(cam.ay);
+      const ce=Math.cos(cam.ax), se=Math.sin(cam.ax);
+      return points.map(p => {
+        const dx = (p.x - cx) / normFactor;
+        const dy = (p.y - cy) / normFactor;
+        const dz = (p.z - cz) / normFactor;
+        const x1 = dx*ca + dz*sa;
+        const z1 = -dx*sa + dz*ca;
+        const y2 = dy*ce - z1*se;
+        const z2 = dy*se + z1*ce;
+        return { 
+          X: w/2 + x1 * cam.scale + cam.panX, 
+          Y: h/2 - y2 * cam.scale + cam.panY, 
+          Z: z2, orig: p, normX: dx, normY: dy, normZ: dz,
+          norm: Math.sqrt(p.x*p.x + p.y*p.y + p.z*p.z) 
+        };
+      });
+    }
+
+    function renderLayerFlow() {
+      const cvs = UI.cvs.layer, ctx = UI.ctx.layer;
+      const w = cvs.width, h = cvs.height;
+      ctx.clearRect(0,0,w,h);
+      const { points, bounds } = getLayerPoints();
+      if(!points.length) return;
+      UI.hud.layerT.textContent = `Layer: ${STATE.currLayer}`;
+      STATE.p2d = projectOrthographic(points, w, h, STATE.cam, bounds);
+      const p2d = [...STATE.p2d]; 
+      p2d.sort((a,b)=>b.Z-a.Z); 
+      let minNorm = Infinity, maxNorm = -Infinity;
+      p2d.forEach(p => { if(p.norm<minNorm) minNorm=p.norm; if(p.norm>maxNorm) maxNorm=p.norm; });
+      const posMap = new Map();
+      p2d.forEach(p => posMap.set(p.orig.pos, p));
+      ctx.beginPath(); ctx.strokeStyle = "rgba(0,0,0,0.06)"; ctx.lineWidth = 1;
+      const sortedPos = points.map(p=>p.pos).sort((a,b)=>a-b);
+      let prev = null;
+      for(let i=0; i<sortedPos.length; i++){
+        const p = posMap.get(sortedPos[i]);
+        if(p){ if(prev) { ctx.moveTo(prev.X, prev.Y); ctx.lineTo(p.X, p.Y); } prev = p; }
+      }
+      ctx.stroke();
+      if (STATE.selectedPos !== null) {
+        ctx.beginPath(); ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 2;
+        const curr = posMap.get(STATE.selectedPos);
+        const prevP = posMap.get(STATE.selectedPos - 1);
+        const nextP = posMap.get(STATE.selectedPos + 1);
+        if (curr && prevP) { ctx.moveTo(prevP.X, prevP.Y); ctx.lineTo(curr.X, curr.Y); }
+        if (curr && nextP) { ctx.moveTo(curr.X, curr.Y); ctx.lineTo(nextP.X, nextP.Y); }
+        ctx.stroke();
+      }
+      let hovered = null;
+      if(STATE.lastMouse && !STATE.isDragging) {
+        let minDist = 20; 
+        p2d.forEach(p => {
+          const dx = STATE.lastMouse.x - p.X; const dy = STATE.lastMouse.y - p.Y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if(dist < minDist) { minDist = dist; hovered = p; }
+        });
+      }
+      STATE.hoverNode = hovered;
+      p2d.forEach(p => {
+        const isHover = (hovered && hovered.orig.pos === p.orig.pos);
+        const isSel = (STATE.selectedPos === p.orig.pos);
+        let radius = 4;
+        if(maxNorm > minNorm) { const ratio = (p.norm - minNorm) / (maxNorm - minNorm); radius = 3 + ratio * 8; }
+        if(isSel || isHover) radius += 3;
+        ctx.beginPath(); ctx.arc(p.X, p.Y, radius, 0, Math.PI*2);
+        if(isSel) ctx.fillStyle = "#2563eb"; else if(isHover) ctx.fillStyle = "#f59e0b"; else ctx.fillStyle = "#1f2937";
+        ctx.fill();
+        const labelText = p.orig.token.replace(/\n/g,'↵').slice(0,15);
+        if(labelText) {
+            ctx.fillStyle = (isSel || isHover) ? "#000" : "#9ca3af"; 
+            ctx.font = (isSel || isHover) ? "600 12px -apple-system, sans-serif" : "500 11px -apple-system, sans-serif";
+            if(isSel || isHover) { ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 4; ctx.strokeText(labelText, p.X + radius + 4, p.Y + 4); }
+            ctx.fillText(labelText, p.X + radius + 4, p.Y + 4);
+        }
+      });
+      if(STATE.hoverNode) {
+        const o = STATE.hoverNode.orig;
+        UI.hud.layerD.innerHTML = `Token: <b style="color:#111">${escape(o.token)}</b><br>Norm: ${STATE.hoverNode.norm.toFixed(3)}<br>Pos: ${o.pos}`;
+      } else { UI.hud.layerD.innerHTML = ""; }
+    }
+
+    function renderMiniDepth() {
+      const cvs = UI.cvs.mini, ctx = UI.ctx.mini;
+      const r = cvs.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio||1;
+      if(cvs.width !== r.width*dpr) { cvs.width = r.width*dpr; cvs.height = r.height*dpr; }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      const w=r.width, h=r.height;
+      ctx.clearRect(0,0,w,h);
+      const t = STATE.tokens.get(STATE.selectedPos);
+      if(!t) return;
+      const points = [];
+      STATE.layerOrder.forEach((lName, idx) => {
+        const c = t.perLayer.get(lName);
+        if(c) points.push({ x:c[0], y:c[1], z:c[2], idx: idx, label: idx.toString() });
+      });
+      if(points.length < 2) return;
+      const mean = {x:0, y:0, z:0};
+      points.forEach(p => { mean.x+=p.x; mean.y+=p.y; mean.z+=p.z; });
+      mean.x /= points.length; mean.y /= points.length; mean.z /= points.length;
+      const ax = 0.61, ay = 0.78; 
+      const ca=Math.cos(ay), sa=Math.sin(ay), ce=Math.cos(ax), se=Math.sin(ax);
+      const p2d = points.map(p => {
+        const dx = p.x - mean.x; const dy = p.y - mean.y; const dz = p.z - mean.z;
+        const x1 = dx*ca + dz*sa; const z1 = -dx*sa + dz*ca;
+        const y2 = dy*ce - z1*se; const z2 = dy*se + z1*ce;
+        return { x: x1, y: y2, z: z2, orig: p };
+      });
+      let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+      p2d.forEach(p => {
+        if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+        if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+      });
+      const dataW = (maxX - minX) || 1; const dataH = (maxY - minY) || 1;
+      const availW = w - 40; const availH = h - 40;
+      const scale = Math.min(availW / dataW, availH / dataH) * 0.75;
+      const offsetX = w/2 - (minX + maxX)/2 * scale;
+      const offsetY = h/2 - (minY + maxY)/2 * -scale; 
+      const finalPts = p2d.map(p => ({ X: p.x * scale + offsetX, Y: -p.y * scale + offsetY, idx: p.orig.idx, label: p.orig.label }));
+      ctx.beginPath(); ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 1.5;
+      for(let i=0; i<finalPts.length-1; i++) { const a = finalPts[i], b = finalPts[i+1]; ctx.moveTo(a.X, a.Y); ctx.lineTo(b.X, b.Y); }
+      ctx.stroke();
+      finalPts.sort((a,b) => b.idx - a.idx); 
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = "500 10px sans-serif";
+      finalPts.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.X, p.Y, 3, 0, Math.PI*2);
+        ctx.fillStyle = "#2563eb"; ctx.fill();
+        ctx.fillStyle = "#6b7280"; ctx.fillText(p.label, p.X + 6, p.Y);
+      });
+    }
+
+    function renderHeat() {
+      const cvs = UI.cvs.heat, ctx = UI.ctx.heat;
+      const w=cvs.width, h=cvs.height;
+      ctx.clearRect(0,0,w,h);
+      const xToks = orderedToks();
+      const yToks = [...xToks];
+      if(STATE.pred.pos !== null) yToks.push({pos:STATE.pred.pos, token:STATE.pred.tok, isPred:true});
+      if(!xToks.length) return;
+      const layerData = STATE.attn.store.get(STATE.attn.currLayer);
+      if(!layerData) return;
+      if(STATE.attn.viewMode === 'single') renderSingleHead(ctx, w, h, xToks, yToks, layerData);
+      else renderGridHeads(ctx, w, h, xToks, yToks, layerData);
+    }
+
+    function renderSingleHead(ctx, w, h, xToks, yToks, layerData) {
+      const padL=40, padT=30;
+      const cellW=(w-60)/xToks.length, cellH=(h-60)/yToks.length;
+      const key = (STATE.attn.currHead === 'avg') ? 'avg' : `h${STATE.attn.currHead}`;
+      const hMap = layerData.get(key);
+      const headName = STATE.attn.currHead === 'avg' ? 'Average' : `Head ${STATE.attn.currHead}`;
+      UI.hud.heatInfo.innerHTML = `<span style="font-weight:600; color:#111">${STATE.attn.currLayer}</span><br><span style="color:#6b7280; font-size:11px">${headName}</span>`;
+      yToks.forEach((qTok, i) => {
+        const rowData = hMap ? hMap.get(qTok.pos) : null;
+        const y = padT + i*cellH;
+        xToks.forEach((kTok, j) => {
+          const x = padL + j*cellW;
+          if(kTok.pos > qTok.pos) return;
+          if(rowData && rowData[j] !== undefined) {
+            ctx.fillStyle = getHeatColor(rowData[j]);
+            ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(cellW)+1, Math.ceil(cellH)+1);
+          } else { ctx.fillStyle = "#f9fafb"; ctx.fillRect(x,y,cellW,cellH); }
+        });
+        if(STATE.selectedPos !== null && qTok.pos === STATE.selectedPos) {
+           ctx.lineWidth = 2; ctx.strokeStyle = "#2563eb"; ctx.strokeRect(padL, y, xToks.length * cellW, cellH);
+        }
+      });
+      if(STATE.hoverHeat && STATE.hoverHeat.type === 'cell') {
+        const {i,j} = STATE.hoverHeat;
+        if(yToks[i] && xToks[j]) {
+          const x=padL+j*cellW, y=padT+i*cellH;
+          ctx.strokeStyle = "red"; ctx.lineWidth=2; ctx.strokeRect(x,y,cellW,cellH);
+          const val = (hMap && hMap.get(yToks[i].pos)) ? hMap.get(yToks[i].pos)[j] : "no data";
+          UI.hud.heatInfo.innerHTML += `<br>${yToks[i].token} → ${xToks[j].token} : ${typeof val==='number'?val.toFixed(4):val}`;
+        }
+      }
+      ctx.fillStyle = "#000"; ctx.font = "10px monospace"; ctx.textAlign="right"; ctx.textBaseline="middle";
+      yToks.forEach((t, i) => ctx.fillText(t.token.slice(0,5), padL-4, padT + i*cellH + cellH/2));
+      ctx.textAlign="center"; ctx.textBaseline="bottom";
+      xToks.forEach((t, j) => ctx.fillText(t.token.slice(0,5), padL + j*cellW + cellW/2, padT-4));
+      UI.cvs.heat.classList.remove('pointer');
+    }
+
+    function renderGridHeads(ctx, w, h, xToks, yToks, layerData) {
+      const meta = STATE.attn.meta.get(STATE.attn.currLayer);
+      const nHeads = meta ? meta.nHeads : 0;
+      if(nHeads === 0) return;
+      const cols = Math.ceil(Math.sqrt(nHeads));
+      const rows = Math.ceil(nHeads / cols);
+      const margin = 20; 
+      const cellW = (w - margin*(cols+1)) / cols;
+      const cellH = (h - margin*(rows+1)) / rows;
+      STATE.gridInfo = { cols, rows, cellW, cellH, margin };
+      UI.hud.heatInfo.innerHTML = `<span style="font-weight:600; color:#111">${STATE.attn.currLayer}</span><br><span style="color:#6b7280; font-size:11px">Gallery View (${nHeads} heads)</span>`;
+      const mapW = cellW, mapH = cellH - 14; 
+      const tW = mapW / xToks.length;
+      const tH = mapH / yToks.length;
+      for(let hIdx=0; hIdx<nHeads; hIdx++) {
+        const c = hIdx % cols; const r = Math.floor(hIdx / cols);
+        const startX = margin + c*(cellW+margin); const startY = margin + r*(cellH+margin);
+        const hMap = layerData.get(`h${hIdx}`);
+        ctx.fillStyle = "#374151"; ctx.font = "600 11px sans-serif";
+        ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(`Head ${hIdx}`, startX, startY);
+        const mapY = startY + 14;
+        if(STATE.hoverHeat && STATE.hoverHeat.type === 'head' && STATE.hoverHeat.idx === hIdx) {
+            ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 2; ctx.strokeRect(startX-4, startY-4, cellW+8, cellH+8);
+            UI.cvs.heat.classList.add('pointer');
+        }
+        yToks.forEach((qTok, i) => {
+          const rowData = hMap ? hMap.get(qTok.pos) : null;
+          const y = mapY + i*tH;
+          xToks.forEach((kTok, j) => {
+            if(kTok.pos > qTok.pos) return;
+            const x = startX + j*tW;
+            if(rowData && rowData[j] !== undefined) {
+              ctx.fillStyle = getHeatColor(rowData[j]);
+              ctx.fillRect(x, y, tW+0.5, tH+0.5);
+            }
+          });
+        });
+        if(STATE.selectedPos !== null) {
+            const yIndex = yToks.findIndex(t => t.pos === STATE.selectedPos);
+            if(yIndex >= 0) {
+               ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1;
+               ctx.strokeRect(startX, mapY + yIndex*tH, mapW, tH);
+            }
+        }
+      }
+    }
+
+    // --- Interaction ---
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      [UI.cvs.layer, UI.cvs.heat, UI.cvs.tree].forEach(c => {
+        const r = c.parentElement.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+            c.width = r.width*dpr; c.height = r.height*dpr;
+            c.getContext('2d').scale(dpr,dpr);
+        }
+      });
+      render();
+    }
+    
+    function setTab(mode) {
+      STATE.activeTab = mode;
+      Object.keys(UI.tabs).forEach(k => {
+        UI.tabs[k].classList.toggle('on', k===mode);
+        UI.panels[k].classList.toggle('on', k===mode);
+        UI.ctrls[k].classList.toggle('hidden', k!==mode);
+      });
+      updateUI(); resize();
+    }
+
+    // --- Mouse Handling ---
+    const bindMouse = (cvs, type) => {
+      let isMouseDown=false;
+      let startMouse={x:0, y:0};
+      
+      cvs.onmousedown = e => {
+        const rect = cvs.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (cvs.width / rect.width);
+        const my = (e.clientY - rect.top) * (cvs.height / rect.height);
+        isMouseDown = true;
+        startMouse = {x:e.clientX, y:e.clientY};
+
+        // --- TREE INTERACTION ---
+        if(type === 'tree') {
+            const w = cvs.width, h = cvs.height;
+            // Unproject mouse to world
+            const wx = (mx - w/2 - STATE.tree.panX) / STATE.tree.scale;
+            const wy = (my - 50 - STATE.tree.panY) / STATE.tree.scale;
+            
+            // Check Hit Node
+            let hit = null;
+            STATE.tree.physicsNodes.forEach(n => {
+                const dist = Math.sqrt((n.x - wx)**2 + (n.y - wy)**2);
+                if(dist < n.radius + 5) hit = n;
+            });
+            
+            if(hit) {
+                STATE.draggingNode = hit;
+                STATE.isDragging = true;
+                cvs.classList.add('cursor-grabbing');
+            } else {
+                STATE.isPanning = true;
+                cvs.classList.add('cursor-grabbing');
+            }
+            return;
+        }
+
+        // --- LAYER INTERACTION ---
+        let closest = null, minDist = 20;
+        if(STATE.p2d.length) {
+            STATE.p2d.forEach(p => {
+              const dx = mx - p.X, dy = my - p.Y;
+              const d = Math.sqrt(dx*dx+dy*dy);
+              if(d < minDist) { minDist = d; closest = p; }
+            });
+        }
+        if(e.button === 2) { STATE.isPanning = true; cvs.classList.add('cursor-grabbing'); } 
+        else {
+          if(closest) {
+            STATE.dragAnchor = { dx: closest.normX, dy: closest.normY, dz: closest.normZ, mx: closest.X, my: closest.Y };
+            STATE.isDragging = true; cvs.classList.add('cursor-grabbing');
+          } else { STATE.isPanning = true; cvs.classList.add('cursor-grabbing'); }
+        }
+      };
+      
+      cvs.ondblclick = (e) => { 
+          e.preventDefault(); 
+          if(type==='layer') STATE.cam = { ax: 0.5, ay: 0.6, scale: 40, panX: 0, panY: 0 }; 
+          if(type==='tree') { STATE.tree.panX = 0; STATE.tree.panY = 0; STATE.tree.scale = 1.0; }
+          render(); 
+      };
+
+      window.addEventListener('mouseup', () => { 
+          isMouseDown=false; STATE.isDragging = false; STATE.isPanning = false; 
+          STATE.dragAnchor = null; STATE.draggingNode = null;
+          cvs.classList.remove('cursor-grabbing'); 
+      });
+      cvs.oncontextmenu = e => e.preventDefault(); 
+      
+      cvs.onmousemove = e => {
+        const rect = cvs.getBoundingClientRect();
+        const mxCanvas = (e.clientX - rect.left) * (cvs.width / rect.width);
+        const myCanvas = (e.clientY - rect.top) * (cvs.height / rect.height);
+        STATE.lastMouse = { x: mxCanvas, y: myCanvas };
+        const dx = e.clientX - startMouse.x; const dy = e.clientY - startMouse.y;
+        startMouse={x:e.clientX, y:e.clientY};
+        
+        // --- TREE ---
+        if(type === 'tree') {
+            const w = cvs.width, h = cvs.height;
+            // Drag Node
+            if(STATE.draggingNode) {
+                const wx = (mxCanvas - w/2 - STATE.tree.panX) / STATE.tree.scale;
+                const wy = (myCanvas - 50 - STATE.tree.panY) / STATE.tree.scale;
+                STATE.draggingNode.x = wx;
+                STATE.draggingNode.y = wy;
+                STATE.draggingNode.vx = 0; STATE.draggingNode.vy = 0; // stop physics
+                return;
+            }
+            // Pan
+            if(STATE.isPanning) {
+                STATE.tree.panX += dx; STATE.tree.panY += dy;
+                return;
+            }
+            // Hover logic
+            const wx = (mxCanvas - w/2 - STATE.tree.panX) / STATE.tree.scale;
+            const wy = (myCanvas - 50 - STATE.tree.panY) / STATE.tree.scale;
+            let hit = null;
+            STATE.tree.physicsNodes.forEach(n => {
+                const dist = Math.sqrt((n.x - wx)**2 + (n.y - wy)**2);
+                if(dist < n.radius + 5) hit = n;
+            });
+            STATE.hoverNode = hit;
+            if(hit) {
+                cvs.classList.add('cursor-pointer');
+                UI.hud.treeInfo.innerHTML = `Token: <b>${escape(hit.tok)}</b><br>Prob: ${(hit.prob*100).toFixed(2)}%<br>Rank: ${hit.id.split('-')[1]}`;
+            } else {
+                cvs.classList.remove('cursor-pointer');
+                UI.hud.treeInfo.innerHTML = "";
+            }
+            return;
+        }
+
+        // --- LAYER ---
+        if(STATE.isDragging && STATE.dragAnchor) {
+          STATE.cam.ay -= dx*0.005; STATE.cam.ax += dy*0.005;
+          const ca=Math.cos(STATE.cam.ay), sa=Math.sin(STATE.cam.ay), ce=Math.cos(STATE.cam.ax), se=Math.sin(STATE.cam.ax);
+          const { dx:adx, dy:ady, dz:adz, mx:amx, my:amy } = STATE.dragAnchor;
+          const x1 = adx*ca + adz*sa; const z1 = -adx*sa + adz*ca; const y2 = ady*ce - z1*se;
+          STATE.cam.panX = amx - cvs.width/2 - x1*STATE.cam.scale; STATE.cam.panY = amy - cvs.height/2 + y2*STATE.cam.scale;
+        } else if(STATE.isPanning) { STATE.cam.panX += dx; STATE.cam.panY += dy; }
+        render(); 
+      };
+
+      cvs.onwheel = e => { 
+        e.preventDefault();
+        const rect = cvs.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (cvs.width / rect.width);
+        const my = (e.clientY - rect.top) * (cvs.height / rect.height);
+        const w = cvs.width, h = cvs.height;
+        
+        if (type === 'tree') {
+            const zoomSpeed = 0.001 * STATE.tree.scale; 
+            const newScale = STATE.tree.scale * (1 - e.deltaY * 0.001);
+            
+            // Zoom towards mouse
+            const s = newScale / STATE.tree.scale;
+            STATE.tree.panX = mx - (mx - w/2 - STATE.tree.panX) * s - w/2;
+            STATE.tree.panY = my - (my - 50 - STATE.tree.panY) * s - 50;
+            
+            STATE.tree.scale = Math.max(0.1, Math.min(newScale, 5.0));
+            // renderTree handled by loop
+            return;
+        }
+
+        const x1 = (mx - w/2 - STATE.cam.panX) / STATE.cam.scale;
+        const y2 = (h/2 + STATE.cam.panY - my) / STATE.cam.scale;
+        const zoomSpeed = 0.1 * STATE.cam.scale; 
+        STATE.cam.scale += (e.deltaY > 0 ? -zoomSpeed : zoomSpeed);
+        if(STATE.cam.scale < 5) STATE.cam.scale = 5; if(STATE.cam.scale > 20000) STATE.cam.scale = 20000; 
+        STATE.cam.panX = mx - w/2 - x1 * STATE.cam.scale; STATE.cam.panY = my - h/2 + y2 * STATE.cam.scale;
+        render(); 
+      };
+    };
+
+    bindMouse(UI.cvs.layer, 'layer');
+    bindMouse(UI.cvs.tree, 'tree'); // Bind tree logic
+
+    UI.cvs.heat.onmousemove = e => {
+      const r = UI.cvs.heat.getBoundingClientRect();
+      const xToks=orderedToks();
+      const yToks=[...xToks, ...(STATE.pred.pos?[1]:[])];
+      if(!xToks.length) return;
+      const mx = e.clientX-r.left;
+      const my = e.clientY-r.top;
+      if(STATE.attn.viewMode === 'single') {
+        const j = Math.floor((mx-40)/((r.width-60)/xToks.length));
+        const i = Math.floor((my-30)/((r.height-60)/yToks.length));
+        STATE.hoverHeat = (j>=0 && j<xToks.length && i>=0 && i<yToks.length) ? {type:'cell', i,j} : null;
+      } else {
+        const { cols, rows, cellW, cellH, margin } = STATE.gridInfo || {};
+        if(cols) {
+           let found = null;
+           const meta = STATE.attn.meta.get(STATE.attn.currLayer);
+           const nHeads = meta ? meta.nHeads : 0;
+           for(let hIdx=0; hIdx<nHeads; hIdx++){
+             const c = hIdx % cols; const row = Math.floor(hIdx / cols);
+             const sx = margin + c*(cellW+margin); const sy = margin + row*(cellH+margin);
+             if(mx >= sx && mx <= sx+cellW && my >= sy && my <= sy+cellH) { found = hIdx; break; }
+           }
+           STATE.hoverHeat = (found !== null) ? {type:'head', idx:found} : null;
+        }
+        if(!STATE.hoverHeat) UI.cvs.heat.classList.remove('pointer');
+      }
+      renderHeat();
+    };
+    
+    UI.cvs.heat.onmouseleave = () => { STATE.hoverHeat = null; renderHeat(); };
+    UI.cvs.heat.onclick = e => {
+      if(STATE.attn.viewMode === 'grid' && STATE.hoverHeat && STATE.hoverHeat.type === 'head') {
+        STATE.attn.currHead = STATE.hoverHeat.idx.toString(); STATE.attn.viewMode = 'single'; updateUI(); 
+      }
+    };
+
+    UI.tabs.layer.onclick = () => setTab('layer');
+    UI.tabs.attn.onclick = () => setTab('attn');
+    UI.tabs.probs.onclick = () => setTab('probs');
+
+    UI.selLayer.onchange = e => { STATE.currLayer=e.target.value; render(); };
+    UI.selAttnLayer.onchange = e => { STATE.attn.currLayer=e.target.value; updateUI(); };
+    UI.btnAttnAvg.onclick = () => { STATE.attn.viewMode = 'single'; STATE.attn.currHead = 'avg'; updateUI(); };
+    UI.btnAttnGrid.onclick = () => { STATE.attn.viewMode = 'grid'; updateUI(); };
+
+    UI.connect.onclick = () => {
+      ws = new WebSocket(UI.url.value);
+      ws.onopen = () => { 
+        UI.status.textContent="Connected"; 
+        UI.dot.classList.add("ok"); 
+        activeModel = null;
+        pendingAction = null;
+        updateControls();
+      };
+      ws.onmessage = e => { 
+        const m=JSON.parse(e.data); 
+        if(m.type === "loaded") {
+          activeModel = { name: m.model, variant: m.variant, device: m.device };
+          UI.status.textContent = `Loaded ${m.model}/${m.variant} on ${m.device}`;
+          pendingAction = null;
+          UI.load.textContent = "Load Model";
+          UI.unload.textContent = "Unload";
+          updateControls();
+        } else if(m.type === "unloaded") {
+          activeModel = null;
+          UI.status.textContent = "Models unloaded";
+          pendingAction = null;
+          UI.load.textContent = "Load Model";
+          UI.unload.textContent = "Unload";
+          updateControls();
+        } else if (m.type === "error") {
+          pendingAction = null;
+          UI.status.textContent = `Error: ${m.message || 'Unknown'}`;
+          UI.load.textContent = "Load Model";
+          UI.unload.textContent = "Unload";
+          updateControls();
+        } else {
+          processStep(m);
+        }
+      };
+      ws.onclose = () => { 
+        UI.status.textContent="Disconnected"; 
+        UI.dot.classList.remove("ok"); 
+        ws=null; 
+        activeModel=null;
+        pendingAction=null;
+        UI.load.textContent = "Load Model";
+        UI.unload.textContent = "Unload";
+        updateControls();
+      };
+      ws.onerror = () => {
+        pendingAction = null;
+        UI.load.textContent = "Load Model";
+        UI.unload.textContent = "Unload";
+        updateControls();
+      };
+    };
+    UI.close.onclick = () => ws && ws.close();
+    UI.load.onclick = () => {
+      if(!ws || activeModel || pendingAction) return;
+      const payload = {
+        action: "load",
+        model: UI.model.value,
+        type: UI.variant.value,
+        device: UI.device.value
+      };
+      pendingAction = "load";
+      UI.status.textContent = `Loading ${payload.model}/${payload.type}...`;
+      UI.load.textContent = "Loading...";
+      updateControls();
+      ws.send(JSON.stringify(payload));
+    };
+    UI.unload.onclick = () => {
+      if(!ws || !activeModel || pendingAction) return;
+      pendingAction = "unload";
+      UI.status.textContent = `Unloading ${activeModel.name}/${activeModel.variant}...`;
+      UI.unload.textContent = "Unloading...";
+      updateControls();
+      ws.send(JSON.stringify({ action: "unload" }));
+    };
+    UI.send.onclick = () => {
+      if (pendingAction) return;
+      STATE.tokens.clear(); STATE.pred={pos:null,tok:""}; STATE.attn.store.clear(); 
+      STATE.attn.meta.clear();
+      STATE.tree.physicsNodes = []; STATE.tree.physicsLinks = [];
+      UI.tokenList.innerHTML="";
+      const payload = {
+        action: "generate",
+        model: UI.model.value,
+        type: UI.variant.value,
+        device: UI.device.value,
+        prompt: UI.prompt.value,
+        max_new: parseInt(UI.maxNew.value)
+      };
+      ws.send(JSON.stringify(payload));
+    };
+    UI.clear.onclick = () => { STATE.tokens.clear(); UI.tokenList.innerHTML=""; render(); };
+
+    window.onresize = resize;
+    setTab('probs');
+    updateControls();
+  </script>
+</body>
+</html>
