@@ -226,5 +226,10 @@ class GPT2BPE:
 
     @classmethod 
     def from_pretrained(cls):
-        # a tiny wrapper for consistency
         return cls.gpt2(pretrained=True) 
+    
+    @property
+    def eos_token_id(self):
+        if self.eos_tok is None:
+            return None
+        return self.tok2id[self.eos_tok]
