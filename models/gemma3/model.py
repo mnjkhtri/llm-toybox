@@ -23,7 +23,7 @@ class Gemma3RMSNorm(nn.Module):
     def __init__(self, emb_dim, eps=1e-6):
         super().__init__()
         self.eps = eps
-        self.weight = nn.Parameter(torch.zeros(emb_dim))
+        self.weight = nn.Parameter(torch.empty(emb_dim))
 
     def forward(self, x):
         y = F.rms_norm(
