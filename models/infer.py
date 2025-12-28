@@ -98,8 +98,8 @@ class InferenceMixin:
         prompt_ids,
         *,
         max_new_tokens: int = 256,
-        top_k: int = 10,
-        T: float = 0.8,
+        top_k: int = 64,
+        T: float = 0.95,
         eos_token_id=None,
     ):
         ids = prompt_ids.copy()
