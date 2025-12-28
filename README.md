@@ -1,15 +1,6 @@
-## implemented:
-- gpt2 tokenizer from scratch
-- gpt2 model
-- llama3
-- gemma3
-- qwen
-each supports kv caches
+minimal text gen sandbox: choose a model (gpt2 | llama3 | gemma3 | qwen3), choose base or instruct, and stream tokens on the cli.
 
-## gpt2 bpe tokenizer:
-
-- take text → UTF-8 bytes → map each byte to a unique Unicode stand-in (so BPE can work on them losslessly)
-- optionally pre-split with the GPT-2 regex (so BPE merges are confined to chunks and leading spaces, punctuation behave right)
-- init vocab with 256 stand-ins (one per byte), each mapped to a token id
-- train by counting most-frequent adjacent pairs (inside regex-split chunks), merge the top pair into a new token
-- keep merging until target vocab size; at encode, apply merges greedily by rank; decode by inverting stand-ins → bytes → UTF-8
+usage:
+- `python generate.py --model llama3 --type base`   # default prompt: quantum mechanics
+- `python generate.py --model llama3 --type instruct`   # default prompt: explain quantum mechanics
+- add `--prompt "your own text"` to swap in your own
